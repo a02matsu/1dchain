@@ -28,24 +28,24 @@ N_tot = nint(T_tot/deltaT)
 N_av = nint(T_av / deltaT)
 matrix_size = NumBall
 
-!!
-allocate( pos1(1:NumBall) )
-allocate( mom1(1:NumBall) )
-allocate( force1(1:NumBall) )
-allocate( int_pos1(1:NumBall) )
-allocate( int_mom1(1:NumBall) )
-allocate( int_force1(1:NumBall) )
-!!
-allocate( pos2(1:NumBall) )
-allocate( mom2(1:NumBall) )
-allocate( force2(1:NumBall) )
-allocate( int_pos2(1:NumBall) )
-allocate( int_mom2(1:NumBall) )
-allocate( int_force2(1:NumBall) )
-!!
-allocate( int_XX(1:NumBall,1:NumBall) )
-allocate( int_PP(1:NumBall,1:NumBall) )
-allocate( int_FF(1:NumBall,1:NumBall) )
+!!!
+!allocate( pos1(1:NumBall) )
+!allocate( mom1(1:NumBall) )
+!allocate( force1(1:NumBall) )
+!allocate( int_pos1(1:NumBall) )
+!allocate( int_mom1(1:NumBall) )
+!allocate( int_force1(1:NumBall) )
+!!!
+!allocate( pos2(1:NumBall) )
+!allocate( mom2(1:NumBall) )
+!allocate( force2(1:NumBall) )
+!allocate( int_pos2(1:NumBall) )
+!allocate( int_mom2(1:NumBall) )
+!allocate( int_force2(1:NumBall) )
+!!!
+!allocate( int_XX(1:NumBall,1:NumBall) )
+!allocate( int_PP(1:NumBall,1:NumBall) )
+!allocate( int_FF(1:NumBall,1:NumBall) )
 
 
 end subroutine set_parameters
@@ -53,9 +53,18 @@ end subroutine set_parameters
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! Initial values
-subroutine set_initial_values
+subroutine set_initial_values(pos1,mom1,force1,pos2,mom2,force2,time)
 use global_parameters
 implicit none
+
+double precision, intent(out) :: pos1(1:NumBall) ! pos_X1(1:NumBall)
+double precision, intent(out) :: mom1(1:NumBall) ! mom_X1(1:NumBall)
+double precision, intent(out) :: force1(1:NumBall) ! force1(1:NumBall)
+double precision, intent(out) :: pos2(1:NumBall) ! pos_X1(1:NumBall)
+double precision, intent(out) :: mom2(1:NumBall) ! mom_X1(1:NumBall)
+double precision, intent(out) :: force2(1:NumBall) ! force1(1:NumBall)
+double precision, intent(out) :: time
+
 
 integer :: n, i,j
 
@@ -75,11 +84,18 @@ if( new_config == 1 ) then
   time=0d0
 
   !! position is zero
-  pos1=0d0
+  do i=1,Numball
+    pos1=dble(i)
+  enddo
+  mom1=0d0
   !! momentum is random
+  !call set_random_seed
+  !call BoxMuller(mom1)
+  !call make_total_momentum_zero(mom1)
   call set_random_seed
-  call BoxMuller(mom1)
-  call make_total_momentum_zero(mom1)
+  call BoxMuller(k_spring2)
+  k_spring2 = dabs(k_spring2)
+
 
 else
   if( job_number== 0 ) then 
@@ -100,7 +116,7 @@ else
   close(Inconf_FILE)
 endif
 
-call calc_force(force1,pos1)
+call calc_force2(force1,pos1)
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -111,11 +127,12 @@ force2=force1
 call time_evolution(pos2,mom2,force2,T_diff)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-!write(Outconf_FILE_NAME,'("CONFIG/lastconfig_",i4.4)') job_number
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! File Names
 write(OUTCONF_FILE_NAME,'("config_N",i3.3,"NL",f5.3,"_",i4.4)') NumBall,r_NL,job_number
-write(MXX_FILE_NAME,'("OUTPUT/SVXX_N",i3.3,"NL",f5.3,"t",i3.3,"D",i3.3,"_",i4.4)') NumBall,r_NL,int(T_diff),int(T_av),job_number
-write(MPP_FILE_NAME,'("OUTPUT/SVVV_N",i3.3,"NL",f5.3,"t",i3.3,"D",i3.3,"_",i4.4)') NumBall,r_NL,int(T_diff),int(T_av),job_number
-write(MFF_FILE_NAME,'("OUTPUT/SVFF_N",i3.3,"NL",f5.3,"t",i3.3,"D",i3.3,"_",i4.4)') NumBall,r_NL,int(T_diff),int(T_av),job_number
+write(MXX_FILE_NAME,'("OUTPUT/SVXX_N",i3.3,"NL",f5.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
+write(MPP_FILE_NAME,'("OUTPUT/SVVV_N",i3.3,"NL",f5.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
+write(MFF_FILE_NAME,'("OUTPUT/SVFF_N",i3.3,"NL",f5.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
 
 end subroutine set_initial_values
 
@@ -140,6 +157,33 @@ do i=1,N
   mom(i)=mom(i) - total_mom
 enddo
 end subroutine make_total_momentum_zero
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Hamiltonian 
+subroutine calc_hamiltonian(Ham,pos,mom)
+use global_parameters
+implicit none
+
+double precision, intent(out) :: Ham
+double precision, intent(in) :: pos(1:NumBall), mom(1:NumBall)
+integer :: i,next
+
+Ham=0d0
+do i=1,NumBall
+  if( i==NumBall ) then 
+    next=1
+  else
+    next=i+1
+  endif
+
+  Ham = Ham &
+    + mom(i)**2 / (2d0*MASS) &
+    + 0.5d0*k_spring * (pos(next)-pos(i))**2 &
+    + k_nonlinear * ( pos(next)-pos(i) )**4
+enddo
+
+end subroutine calc_hamiltonian
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! Calculate forces
@@ -168,7 +212,7 @@ end subroutine calc_force
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! Hamiltonian 
-subroutine calc_hamiltonian(Ham,pos,mom)
+subroutine calc_hamiltonian2(Ham,pos,mom)
 use global_parameters
 implicit none
 
@@ -186,11 +230,34 @@ do i=1,NumBall
 
   Ham = Ham &
     + mom(i)**2 / (2d0*MASS) &
-    + 0.5d0*k_spring * (pos(next)-pos(i))**2 &
+    + 0.5d0*k_spring2(i) * pos(i)**2 & !(pos(next)-pos(i))**2 &
     + k_nonlinear * ( pos(next)-pos(i) )**4
 enddo
 
-end subroutine calc_hamiltonian
+end subroutine calc_hamiltonian2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Calculate forces
+subroutine calc_force2(force,pos)
+use global_parameters
+implicit none
+
+double precision, intent(out) :: force(1:NumBall)
+double precision, intent(in) :: pos(1:NumBall)
+integer i,prev,next
+
+do i=1,NumBall
+  prev=i-1
+  next=i+1
+  if( prev==0 ) prev=NumBall
+  if( next==NumBall+1 ) next=1
+
+  force(i) = &
+    - k_spring2(i) * pos(i) &
+    + 4d0*k_nonlinear * (pos(next)-pos(i))**3 &
+    - 4d0*k_nonlinear * (pos(i)-pos(prev))**3 
+enddo
+
+end subroutine calc_force2
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! time evolution for a given time
@@ -227,7 +294,7 @@ integer n
 
 pos = pos + deltaT*mom/Mass + 0.5d0*deltaT*deltaT*force/Mass
 
-call calc_force(force_2,pos)
+call calc_force2(force_2,pos)
 mom = mom + 0.5d0*deltaT*(force+force_2)
 force=force_2
 
@@ -278,13 +345,14 @@ end subroutine integration
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! write singular value of M^{XX} to file
-subroutine write_SV(vec1, vec2, mat, FILE_NUM)
+subroutine write_SV(vec1, vec2, mat, time, FILE_NUM)
 use global_parameters
 implicit none
 
 double precision, intent(in) :: vec1(1:NumBall)
 double precision, intent(in) :: vec2(1:NumBall)
 double precision, intent(in) :: MAT(1:NumBall,1:NumBall)
+double precision, intent(in) :: time
 integer, intent(in) :: FILE_NUM
 
 double precision :: MXX(1:NumBall,1:NumBall)
@@ -301,8 +369,11 @@ write(FILE_NUM,FMT1,advance='no') time
 do j=1,NumBall
   do i=1,NumBall
     MXX(i,j) = Mat(i,j) - vec1(i)*vec2(j)
+    !write(*,*) i,j,MXX(i,j)
   enddo
 enddo
+!write(*,*) "#####"
+
 
 call Matrix_Singularvalues(SV,MXX)
 
@@ -326,10 +397,9 @@ double precision, intent(out) :: sval(:) !
 character JOBU, JOBVT
 integer M,N,LDA,LDU,LDVT,LWORK,INFO
 integer, allocatable :: IWORK(:)
-double precision :: VL,VU
+!double precision :: VL,VU
 double precision, allocatable :: RWORK(:)
-complex(kind(0d0)), allocatable :: A(:,:),VT(:,:),WORK(:)
-complex(kind(0d0)), allocatable :: U(:,:)
+double precision, allocatable :: A(:,:),VT(:,:),WORK(:),U(:,:)
 
 
 M=size(MAT,1)
@@ -340,15 +410,14 @@ ldu = m
 ldvt = n
 LWORK= 5*N
 Allocate (a(m,n), u(ldu,m), VT(ldvt,n), WORK(LWORK), rwork(5*n))
-A=dcmplx(MAT) ! This is destoroyed
+A=MAT ! This is destoroyed
 
 
 JOBU='N'
 JOBVT='N' 
 
-Call zgesvd(JOBU, JOBVT, m, n, a, lda, sval, u, ldu, vt, ldvt, WORK, lwork, &
+Call dgesvd(JOBU, JOBVT, m, n, a, lda, sval, u, ldu, vt, ldvt, WORK, lwork, &
         rwork, info)
-
 
 
 end subroutine Matrix_Singularvalues

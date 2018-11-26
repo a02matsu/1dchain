@@ -8,12 +8,58 @@ implicit none
 
 character(128) OUT_FMT,command
 double precision :: Ham0, Ham1
+!!!!!!!!!!!!!!!!
+!! variables 
+! time
+double precision :: time
+! X(t), P(t)
+double precision, allocatable :: pos1(:) ! pos_X1(1:NumBall)
+double precision, allocatable :: mom1(:) ! mom_X1(1:NumBall)
+double precision, allocatable :: force1(:) ! force1(1:NumBall)
+! X(t+T_diff), P(t+T_diff)
+double precision, allocatable :: pos2(:) ! pos_X2(1:NumBall)
+double precision, allocatable :: mom2(:) ! mom_X2(1:NumBall)
+double precision, allocatable :: force2(:) ! force2(1:NumBall)
+! 
+double precision, allocatable :: int_pos1(:) ! \int pos1 dt
+double precision, allocatable :: int_mom1(:) ! \int mom1 dt
+double precision, allocatable :: int_force1(:) ! \int force1 dt
+double precision, allocatable :: int_pos2(:) ! \int pos2 dt
+double precision, allocatable :: int_mom2(:) ! \int mom2 dt
+double precision, allocatable :: int_force2(:) ! \int force2 dt
+double precision, allocatable :: int_XX(:,:) ! \int X_i(s)X_j(s+t) ds
+double precision, allocatable :: int_PP(:,:) ! \int P_i(s)P_j(s+t) ds
+double precision, allocatable :: int_FF(:,:) ! \int F_i(s)F_j(s+t) ds
+!!!!!!!!!!!!!!!!
 integer :: counter,k
 
 ! パラメータの読み込み
 call set_parameters
+
+! 動的変数の割り当て
+!!
+allocate( pos1(1:NumBall) )
+allocate( mom1(1:NumBall) )
+allocate( force1(1:NumBall) )
+allocate( int_pos1(1:NumBall) )
+allocate( int_mom1(1:NumBall) )
+allocate( int_force1(1:NumBall) )
+!!
+allocate( pos2(1:NumBall) )
+allocate( mom2(1:NumBall) )
+allocate( force2(1:NumBall) )
+allocate( int_pos2(1:NumBall) )
+allocate( int_mom2(1:NumBall) )
+allocate( int_force2(1:NumBall) )
+!!
+allocate( int_XX(1:NumBall,1:NumBall) )
+allocate( int_PP(1:NumBall,1:NumBall) )
+allocate( int_FF(1:NumBall,1:NumBall) )
+!!
+allocate( k_spring2(1:NumBall) )
+
 ! 初期条件を設定
-call set_initial_values
+call set_initial_values(pos1,mom1,force1,pos2,mom2,force2,time)
 !write(*,*) NumBall
 ! 
 
@@ -39,12 +85,8 @@ int_PP=0d0
 int_FF=0d0
 counter=0
 
-call calc_hamiltonian(Ham0,pos1,mom1)
+call calc_hamiltonian2(Ham0,pos1,mom1)
 do k=0,N_tot-1
-  !write(*,*) "###",k
-  !write(*,*) pos1
-  !write(*,*) mom1
-  !write(*,*) force1
   !!! integration 
   if( write_output == 0 ) then 
     call integration(int_pos1, int_pos2, int_XX, pos1, pos2, counter)
@@ -59,9 +101,9 @@ do k=0,N_tot-1
   counter = counter + 1
   if( counter == N_av ) then
     if( write_output == 0 ) then 
-      call write_SV(int_pos1, int_pos2, int_XX, MXX_FILE)
-      call write_SV(int_mom1, int_mom2, int_PP, MPP_FILE)
-      call write_SV(int_force1, int_force2, int_FF, MFF_FILE)
+      call write_SV(int_pos1, int_pos2, int_XX, time, MXX_FILE)
+      call write_SV(int_mom1, int_mom2, int_PP, time, MPP_FILE)
+      call write_SV(int_force1, int_force2, int_FF, time, MFF_FILE)
     endif
     !! reset integration data
     int_pos1=0d0
@@ -77,7 +119,7 @@ do k=0,N_tot-1
   endif
   !!!!!!!!!!!!!!!!!!!!
 enddo
-call calc_hamiltonian(Ham1,pos1,mom1)
+call calc_hamiltonian2(Ham1,pos1,mom1)
 
 write(*,*) "# H(final)-H(initial)=",Ham1-Ham0
 
