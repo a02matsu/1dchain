@@ -1,0 +1,11 @@
+0  ! job_number 
+10 ! NumBall
+1d0 ! MASS
+1d0 ! k_spring
+0d0 ! r_NL: Non-Liniarity i.e. k_nonlinear=r_NL * k_spring
+0   ! new_config : 0:read old config 1: new config
+0   ! write_output : 0:write, 1: do not write
+1d2  ! T_tot
+10d0  ! T_av
+0d0  ! T_diff
+1d-4  ! deltaT
