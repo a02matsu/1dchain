@@ -12,9 +12,7 @@ implicit none
 open(INPUT_FILE, file=INPUT_FILE_NAME, status='old', action='READ')
   read(INPUT_FILE,*) job_number
   read(INPUT_FILE,*) NumBall
-  read(INPUT_FILE,*) MASS
-  read(INPUT_FILE,*) k_spring
-  read(INPUT_FILE,*) r_NL
+  read(INPUT_FILE,*) k_nonlinear
   read(INPUT_FILE,*) new_config
   read(INPUT_FILE,*) write_output
   read(INPUT_FILE,*) T_tot
@@ -23,7 +21,6 @@ open(INPUT_FILE, file=INPUT_FILE_NAME, status='old', action='READ')
   read(INPUT_FILE,*) deltaT
 close(INPUT_FILE)
 
-k_nonlinear = k_spring * r_NL
 N_tot = nint(T_tot/deltaT)
 N_av = nint(T_av / deltaT)
 matrix_size = NumBall
@@ -76,11 +73,14 @@ call system('FILE="CONFIG"; if [ ! -d $FILE ]; then mkdir -p $FILE; fi')
 !call system('FILE="SV"; if [ ! -d $FILE ]; then mkdir -p $FILE; fi')
 
 ! LASTCONF_FILE_NAME（シンボリックリンク）の設定
-write(LASTCONF_FILE_NAME,'("lastconfig_N",i3.3,"NL",f5.3)') NumBall,r_NL
+write(LASTCONF_FILE_NAME,'("lastconfig_N",i3.3,"NL",E9.3)') NumBall,r_NL
+
+! random number generatorの初期化
+call set_random_seed
 
 !! set initial Xmat1, Vmat1 and Fmat1
 if( new_config == 1 ) then 
-  job_number=0
+  job_number=1
   time=0d0
 
   !! position is zero
@@ -92,16 +92,13 @@ if( new_config == 1 ) then
   !call set_random_seed
   !call BoxMuller(mom1)
   !call make_total_momentum_zero(mom1)
-  call set_random_seed
-  call BoxMuller(k_spring2)
-  k_spring2 = dabs(k_spring2)
 
 
 else
   if( job_number== 0 ) then 
     INCONF_FILE_NAME=trim("CONFIG/" // LASTCONF_FILE_NAME)
   else
-    write(Inconf_FILE_NAME,'("CONFIG/config_N",i3.3,"NL",f5.3,"_",i4.4)') NumBall,r_NL,job_number-1
+    write(Inconf_FILE_NAME,'("CONFIG/config_N",i3.3,"NL",E9.3,"_",i4.4)') NumBall,r_NL,job_number-1
   endif
 
   open(unit=Inconf_FILE, file=Inconf_FILE_NAME, status='old', action='read',form='unformatted')
@@ -112,6 +109,10 @@ else
   read(Inconf_File) time
   read(Inconf_File) pos1
   read(Inconf_File) mom1
+
+  !! k_springは乱数
+  call BoxMuller(k_spring)
+  k_spring = dabs(k_spring**2)
 
   close(Inconf_FILE)
 endif
@@ -129,10 +130,10 @@ call time_evolution(pos2,mom2,force2,T_diff)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! File Names
-write(OUTCONF_FILE_NAME,'("config_N",i3.3,"NL",f5.3,"_",i4.4)') NumBall,r_NL,job_number
-write(MXX_FILE_NAME,'("OUTPUT/SVXX_N",i3.3,"NL",f5.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
-write(MPP_FILE_NAME,'("OUTPUT/SVVV_N",i3.3,"NL",f5.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
-write(MFF_FILE_NAME,'("OUTPUT/SVFF_N",i3.3,"NL",f5.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
+write(OUTCONF_FILE_NAME,'("config_N",i3.3,"NL",E9.3,"_",i4.4)') NumBall,r_NL,job_number
+write(MXX_FILE_NAME,'("OUTPUT/SVXX_N",i3.3,"NL",E9.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
+write(MPP_FILE_NAME,'("OUTPUT/SVVV_N",i3.3,"NL",E9.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
+write(MFF_FILE_NAME,'("OUTPUT/SVFF_N",i3.3,"NL",E9.3,"Tdiff",E9.3,"Tav",E9.3,"_",i4.4)') NumBall,r_NL,(T_diff),(T_av),job_number
 
 end subroutine set_initial_values
 
@@ -179,7 +180,7 @@ do i=1,NumBall
 
   Ham = Ham &
     + mom(i)**2 / (2d0*MASS) &
-    + 0.5d0*k_spring * (pos(next)-pos(i))**2 &
+    + 0.5d0*k_spring(i) * (pos(next)-pos(i))**2 &
     + k_nonlinear * ( pos(next)-pos(i) )**4
 enddo
 
@@ -202,8 +203,8 @@ do i=1,NumBall
   if( next==NumBall+1 ) next=1
 
   force(i) = &
-      k_spring * (pos(next)-pos(i)) &
-    - k_spring * (pos(i)-pos(prev)) &
+      k_spring(i) * (pos(next)-pos(i)) &
+    - k_spring(i)* (pos(i)-pos(prev)) &
     + 4d0*k_nonlinear * (pos(next)-pos(i))**3 &
     - 4d0*k_nonlinear * (pos(i)-pos(prev))**3 
 enddo
@@ -230,7 +231,7 @@ do i=1,NumBall
 
   Ham = Ham &
     + mom(i)**2 / (2d0*MASS) &
-    + 0.5d0*k_spring2(i) * pos(i)**2 & !(pos(next)-pos(i))**2 &
+    + 0.5d0*k_spring(i) * pos(i)**2 & !(pos(next)-pos(i))**2 &
     + k_nonlinear * ( pos(next)-pos(i) )**4
 enddo
 
@@ -252,7 +253,7 @@ do i=1,NumBall
   if( next==NumBall+1 ) next=1
 
   force(i) = &
-    - k_spring2(i) * pos(i) &
+    - k_spring(i) * pos(i) &
     + 4d0*k_nonlinear * (pos(next)-pos(i))**3 &
     - 4d0*k_nonlinear * (pos(i)-pos(prev))**3 
 enddo

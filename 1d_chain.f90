@@ -56,11 +56,11 @@ allocate( int_XX(1:NumBall,1:NumBall) )
 allocate( int_PP(1:NumBall,1:NumBall) )
 allocate( int_FF(1:NumBall,1:NumBall) )
 !!
-allocate( k_spring2(1:NumBall) )
+allocate( k_spring(1:NumBall) )
 
 ! 初期条件を設定
 call set_initial_values(pos1,mom1,force1,pos2,mom2,force2,time)
-!write(*,*) NumBall
+write(*,*) NumBall
 ! 
 
 OUT_FMT=trim('(a,I3,2X,a,f6.2,2X,a,E12.2,2X,a,E12.2,2X,a,E12.2,2X,a,E12.2)')
@@ -97,6 +97,8 @@ do k=0,N_tot-1
   time=time+deltaT 
   call LeapFrog(pos1,mom1,force1)
   call LeapFrog(pos2,mom2,force2)
+
+  !write(*,*) pos1
 
   counter = counter + 1
   if( counter == N_av ) then

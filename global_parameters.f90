@@ -4,10 +4,10 @@ module global_parameters
 implicit none
 
 integer :: NumBall
-double precision :: MASS
-double precision :: k_spring
+double precision, parameter :: MASS=1d0
+double precision, parameter :: k_base=1d0
 double precision :: k_nonlinear
-double precision, allocatable :: k_spring2(:)
+double precision, allocatable :: k_spring(:)
 double precision :: r_NL
 
 
